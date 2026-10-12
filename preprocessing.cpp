@@ -7,12 +7,21 @@
 
 #include "data_loader.hpp"
 
+// missing values are kept as their own category
+bool isMissingValue(const std::string& value) {
+    return value == "?";
+}
+
 // decide whether every value in each feature column is numeric
 std::vector<bool> findNumericColumns(const std::vector<RawLabeledTransaction>& transactions) {
     std::vector<bool> numericColumns(transactions.front().values.size(), true);
 
     for (const RawLabeledTransaction& transaction : transactions) {
         for (std::size_t index = 0; index < transaction.values.size(); ++index) {
+            if (isMissingValue(transaction.values[index])) {
+                continue;
+            }
+
             double parsed = 0.0;
             if (!parseDouble(transaction.values[index], parsed)) {
                 numericColumns[index] = false;
@@ -36,6 +45,10 @@ void findNumericRanges(
     for (const RawLabeledTransaction& transaction : transactions) {
         for (std::size_t index = 0; index < transaction.values.size(); ++index) {
             if (!numericColumns[index]) {
+                continue;
+            }
+
+            if (isMissingValue(transaction.values[index])) {
                 continue;
             }
 
@@ -85,7 +98,9 @@ std::vector<LabeledTransaction> binLabeledTransactions(
         for (std::size_t index = 0; index < rawTransaction.values.size(); ++index) {
             std::string itemName = "attr" + std::to_string(index + 1) + "=";
 
-            if (numericColumns[index]) {
+            if (isMissingValue(rawTransaction.values[index])) {
+                itemName += "missing";
+            } else if (numericColumns[index]) {
                 double parsed = 0.0;
                 parseDouble(rawTransaction.values[index], parsed);
                 itemName += binNumericValue(parsed, mins[index], maxes[index]);

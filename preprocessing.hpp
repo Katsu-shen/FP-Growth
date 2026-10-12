@@ -6,6 +6,7 @@
 
 #include "common.hpp"
 
+bool isMissingValue(const std::string& value);
 std::vector<bool> findNumericColumns(const std::vector<RawLabeledTransaction>& transactions);
 void findNumericRanges(
     const std::vector<RawLabeledTransaction>& transactions,
