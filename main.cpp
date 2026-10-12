@@ -4,6 +4,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <memory>
 #include <set>
@@ -46,6 +47,27 @@ struct WeightedTransaction {
     int count;
 };
 
+// raw csv row before numeric values are turned into bins
+struct RawLabeledTransaction {
+    std::vector<std::string> values;
+    std::string classLabel;
+};
+
+// cleaned transaction where items are ready for fp-growth
+struct LabeledTransaction {
+    Itemset items;
+    std::string classLabel;
+};
+
+// final classification rule
+struct ClassRule {
+    Itemset antecedent;
+    std::string classLabel;
+    int count;
+    double support;
+    double confidence;
+};
+
 // clean data before we start mining data
 static std::string trim(const std::string& value) {
     std::size_t start = 0;
@@ -61,45 +83,178 @@ static std::string trim(const std::string& value) {
     return value.substr(start, end - start);
 }
 
-static Itemset parseTransaction(const std::string& line) {
-    std::set<std::string> uniqueItems;
+// split one csv row by commas
+static std::vector<std::string> splitCsvLine(const std::string& line) {
+    std::vector<std::string> values;
     std::string token;
     std::stringstream stream(line);
 
     while (std::getline(stream, token, ',')) {
-        token = trim(token);
-        if (!token.empty()) {
-            uniqueItems.insert(token);
-        }
+        values.push_back(trim(token));
     }
 
-    return Itemset(uniqueItems.begin(), uniqueItems.end());
+    return values;
 }
 
-// put all clean data within transactions
-static Transactions loadTransactions(const std::string& path) {
+// check if a value can be parsed as a number
+static bool parseDouble(const std::string& value, double& parsed) {
+    std::stringstream stream(value);
+    stream >> parsed;
+    stream >> std::ws;
+    return stream.eof() && !value.empty();
+}
+
+// load csv rows where the last value is the class label
+static std::vector<RawLabeledTransaction> loadRawLabeledTransactions(const std::string& path) {
     std::ifstream input(path);
     if (!input) {
         throw std::runtime_error("Could not open input file: " + path);
     }
 
-    Transactions transactions;
+    std::vector<RawLabeledTransaction> transactions;
+    std::size_t expectedFeatureCount = 0;
     std::string line;
+    int lineNumber = 0;
 
     while (std::getline(input, line)) {
+        ++lineNumber;
         line = trim(line);
         if (line.empty() || line[0] == '#') {
             continue;
         }
 
-        Itemset transaction = parseTransaction(line);
-        if (!transaction.empty()) {
-            transactions.push_back(transaction);
+        std::vector<std::string> values = splitCsvLine(line);
+        if (values.size() < 2) {
+            throw std::runtime_error("Line " + std::to_string(lineNumber) + " needs at least one feature and one class label.");
         }
+
+        std::string classLabel = values.back();
+        values.pop_back();
+
+        if (classLabel.empty()) {
+            throw std::runtime_error("Line " + std::to_string(lineNumber) + " has an empty class label.");
+        }
+
+        if (expectedFeatureCount == 0) {
+            expectedFeatureCount = values.size();
+        } else if (values.size() != expectedFeatureCount) {
+            throw std::runtime_error("Line " + std::to_string(lineNumber) + " has a different number of features.");
+        }
+
+        transactions.push_back({values, classLabel});
     }
 
     if (transactions.empty()) {
         throw std::runtime_error("Input file has no transactions.");
+    }
+
+    return transactions;
+}
+
+// decide whether every value in each feature column is numeric
+static std::vector<bool> findNumericColumns(const std::vector<RawLabeledTransaction>& transactions) {
+    std::vector<bool> numericColumns(transactions.front().values.size(), true);
+
+    for (const RawLabeledTransaction& transaction : transactions) {
+        for (std::size_t index = 0; index < transaction.values.size(); ++index) {
+            double parsed = 0.0;
+            if (!parseDouble(transaction.values[index], parsed)) {
+                numericColumns[index] = false;
+            }
+        }
+    }
+
+    return numericColumns;
+}
+
+// get the min and max value for every numeric column
+static void findNumericRanges(
+    const std::vector<RawLabeledTransaction>& transactions,
+    const std::vector<bool>& numericColumns,
+    std::vector<double>& mins,
+    std::vector<double>& maxes
+) {
+    mins.assign(numericColumns.size(), std::numeric_limits<double>::max());
+    maxes.assign(numericColumns.size(), std::numeric_limits<double>::lowest());
+
+    for (const RawLabeledTransaction& transaction : transactions) {
+        for (std::size_t index = 0; index < transaction.values.size(); ++index) {
+            if (!numericColumns[index]) {
+                continue;
+            }
+
+            double parsed = 0.0;
+            parseDouble(transaction.values[index], parsed);
+            mins[index] = std::min(mins[index], parsed);
+            maxes[index] = std::max(maxes[index], parsed);
+        }
+    }
+}
+
+// turn a numeric value into low, medium, or high
+static std::string binNumericValue(double value, double minValue, double maxValue) {
+    if (minValue == maxValue) {
+        return "medium";
+    }
+
+    double width = (maxValue - minValue) / 3.0;
+    double lowCutoff = minValue + width;
+    double highCutoff = minValue + (2.0 * width);
+
+    if (value < lowCutoff) {
+        return "low";
+    }
+
+    if (value < highCutoff) {
+        return "medium";
+    }
+
+    return "high";
+}
+
+// convert raw csv values into fp-growth items
+static std::vector<LabeledTransaction> binLabeledTransactions(
+    const std::vector<RawLabeledTransaction>& rawTransactions
+) {
+    std::vector<bool> numericColumns = findNumericColumns(rawTransactions);
+    std::vector<double> mins;
+    std::vector<double> maxes;
+    findNumericRanges(rawTransactions, numericColumns, mins, maxes);
+
+    std::vector<LabeledTransaction> transactions;
+
+    for (const RawLabeledTransaction& rawTransaction : rawTransactions) {
+        std::set<std::string> uniqueItems;
+
+        for (std::size_t index = 0; index < rawTransaction.values.size(); ++index) {
+            std::string itemName = "attr" + std::to_string(index + 1) + "=";
+
+            if (numericColumns[index]) {
+                double parsed = 0.0;
+                parseDouble(rawTransaction.values[index], parsed);
+                itemName += binNumericValue(parsed, mins[index], maxes[index]);
+            } else {
+                itemName += rawTransaction.values[index];
+            }
+
+            uniqueItems.insert(itemName);
+        }
+
+        transactions.push_back({
+            Itemset(uniqueItems.begin(), uniqueItems.end()),
+            rawTransaction.classLabel
+        });
+    }
+
+    return transactions;
+}
+
+// keep just the feature items so fp-growth does not mine class labels as items
+static Transactions getFeatureTransactions(const std::vector<LabeledTransaction>& labeledTransactions) {
+    Transactions transactions;
+
+    for (const LabeledTransaction& transaction : labeledTransactions) {
+        transactions.push_back(transaction.items);
     }
 
     return transactions;
@@ -126,7 +281,7 @@ static Itemset filterAndSortTransaction(
 ) {
     Itemset filtered;
 
-    //add transactions to filtered array if there is enough support
+    // add transactions to filtered array if there is enough support
     for (const std::string& item : transaction) {
         auto support = supportCounts.find(item);
         if (support != supportCounts.end() && support->second >= minSupportCount) {
@@ -197,7 +352,7 @@ static void insertTransaction(
     FPNode* current = tree.root.get();
 
     for (const std::string& item : transaction) {
-        //checks if the header already exists in the tree
+        // checks if the header already exists in the tree
         auto child = current->children.find(item);
 
         // if it doesn't then find() returns children.end()
@@ -221,7 +376,7 @@ static void insertTransaction(
 
 // build fp tree from transactions that already include their counts
 static FPTree buildFPTree(
-    const std::vector<WeightedTransaction>& transactions, //includes count
+    const std::vector<WeightedTransaction>& transactions,
     const std::map<std::string, int>& supportCounts
 ) {
     FPTree tree;
@@ -268,7 +423,7 @@ static std::vector<std::string> itemsByAscendingSupport(
         int leftSupport = headerTable.at(left).support;
         int rightSupport = headerTable.at(right).support;
 
-        //lexicological sorting
+        // lexicological sorting
         if (leftSupport != rightSupport) {
             return leftSupport < rightSupport;
         }
@@ -414,6 +569,74 @@ static std::map<Itemset, int> mineFPTree(
     return frequentItemsets;
 }
 
+// check if a pattern is inside one transaction
+static bool isSubset(const Itemset& pattern, const Itemset& transaction) {
+    return std::includes(
+        transaction.begin(),
+        transaction.end(),
+        pattern.begin(),
+        pattern.end()
+    );
+}
+
+// build classification rules from frequent itemsets
+static std::vector<ClassRule> generateClassificationRules(
+    const std::map<Itemset, int>& frequentItemsets,
+    const std::vector<LabeledTransaction>& transactions,
+    double minConfidence
+) {
+    std::vector<ClassRule> rules;
+
+    for (const auto& entry : frequentItemsets) {
+        const Itemset& itemset = entry.first;
+        int itemsetSupport = entry.second;
+        std::map<std::string, int> classCounts;
+
+        for (const LabeledTransaction& transaction : transactions) {
+            if (isSubset(itemset, transaction.items)) {
+                ++classCounts[transaction.classLabel];
+            }
+        }
+
+        for (const auto& classCount : classCounts) {
+            double support = static_cast<double>(classCount.second) / transactions.size();
+            double confidence = static_cast<double>(classCount.second) / itemsetSupport;
+
+            if (confidence >= minConfidence) {
+                rules.push_back({
+                    itemset,
+                    classCount.first,
+                    classCount.second,
+                    support,
+                    confidence
+                });
+            }
+        }
+    }
+
+    std::sort(rules.begin(), rules.end(), [](const ClassRule& left, const ClassRule& right) {
+        if (left.confidence != right.confidence) {
+            return left.confidence > right.confidence;
+        }
+
+        if (left.support != right.support) {
+            return left.support > right.support;
+        }
+
+        if (left.antecedent.size() != right.antecedent.size()) {
+            return left.antecedent.size() < right.antecedent.size();
+        }
+
+        if (left.antecedent != right.antecedent) {
+            return left.antecedent < right.antecedent;
+        }
+
+        return left.classLabel < right.classLabel;
+    });
+
+    return rules;
+}
+
 // print one itemset with commas between items
 static std::string formatItemset(const Itemset& itemset) {
     std::ostringstream output;
@@ -430,29 +653,30 @@ static std::string formatItemset(const Itemset& itemset) {
     return output.str();
 }
 
-// print all frequent itemsets with support ratio and support count
-static void printFrequentItemsets(
-    const std::map<Itemset, int>& frequentItemsets,
+// print class rules with support ratio, confidence, and count
+static void printClassificationRules(
+    const std::vector<ClassRule>& rules,
     int transactionCount
 ) {
     std::cout << std::fixed << std::setprecision(3);
     std::cout << "Transactions: " << transactionCount << "\n\n";
-    std::cout << "Frequent itemsets\n";
+    std::cout << "Classification rules\n";
 
-    if (frequentItemsets.empty()) {
-        std::cout << "  No itemsets met the support threshold.\n";
+    if (rules.empty()) {
+        std::cout << "  No rules met the support and confidence thresholds.\n";
         return;
     }
 
-    for (const auto& entry : frequentItemsets) {
-        double support = static_cast<double>(entry.second) / transactionCount;
-        std::cout << "  " << std::setw(24) << std::left << formatItemset(entry.first)
-                  << " support=" << support
-                  << " count=" << entry.second << "\n";
+    for (const ClassRule& rule : rules) {
+        std::cout << "  " << std::setw(40) << std::left << formatItemset(rule.antecedent)
+                  << " -> {" << rule.classLabel << "}"
+                  << " support=" << rule.support
+                  << " confidence=" << rule.confidence
+                  << " count=" << rule.count << "\n";
     }
 }
 
-// parse min support ratio from command line
+// parse min support ratio or min confidence from command line
 static double parseRatio(const std::string& value, const std::string& name) {
     double parsed = 0.0;
     std::stringstream stream(value);
@@ -469,12 +693,12 @@ static double parseRatio(const std::string& value, const std::string& name) {
 // explain how to run the program if the arguments are wrong
 static void printUsage(const char* programName) {
     std::cerr
-        << "Usage: " << programName << " <transactions.csv> <min_support>\n"
-        << "Example: " << programName << " ../Apriori/sample_transactions.csv 0.4\n";
+        << "Usage: " << programName << " <data.csv> <min_support> <min_confidence>\n"
+        << "Example: " << programName << " iris/iris.data 0.2 0.7\n";
 }
 
 int main(int argc, char* argv[]) {
-    if (argc != 3) {
+    if (argc != 4) {
         printUsage(argv[0]);
         return 1;
     }
@@ -482,14 +706,17 @@ int main(int argc, char* argv[]) {
     try {
         const std::string inputPath = argv[1];
         const double minSupport = parseRatio(argv[2], "min_support");
+        const double minConfidence = parseRatio(argv[3], "min_confidence");
 
-        Transactions transactions = loadTransactions(inputPath);
-        const int minSupportCount = static_cast<int>(std::ceil(minSupport * transactions.size()));
+        std::vector<RawLabeledTransaction> rawTransactions = loadRawLabeledTransactions(inputPath);
+        std::vector<LabeledTransaction> labeledTransactions = binLabeledTransactions(rawTransactions);
+        Transactions featureTransactions = getFeatureTransactions(labeledTransactions);
+        const int minSupportCount = static_cast<int>(std::ceil(minSupport * featureTransactions.size()));
 
         // first scan counts each item before building the tree
-        std::map<std::string, int> supportCounts = countItemSupport(transactions);
+        std::map<std::string, int> supportCounts = countItemSupport(featureTransactions);
         Transactions orderedTransactions = filterAndSortTransactions(
-            transactions,
+            featureTransactions,
             supportCounts,
             minSupportCount
         );
@@ -510,9 +737,15 @@ int main(int argc, char* argv[]) {
             frequentItemsets = mineFPTree(tree, minSupportCount);
         }
 
-        printFrequentItemsets(
+        std::vector<ClassRule> rules = generateClassificationRules(
             frequentItemsets,
-            static_cast<int>(transactions.size())
+            labeledTransactions,
+            minConfidence
+        );
+
+        printClassificationRules(
+            rules,
+            static_cast<int>(labeledTransactions.size())
         );
     } catch (const std::exception& error) {
         std::cerr << "Error: " << error.what() << "\n";
