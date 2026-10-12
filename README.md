@@ -30,8 +30,16 @@ attr1=low, attr2=high, attr3=low, attr4=low -> Iris-setosa
 
 ## Build
 
+The easiest way to build the project is:
+
 ```sh
-g++ -std=c++17 -Wall -Wextra -pedantic -O2 main.cpp -o fp_growth
+make
+```
+
+The manual compile command is:
+
+```sh
+g++ -std=c++17 -Wall -Wextra -pedantic -O2 main.cpp data_loader.cpp preprocessing.cpp fp_tree.cpp classifier.cpp output.cpp -o fp_growth
 ```
 
 ## Run
@@ -44,6 +52,12 @@ Example:
 
 ```sh
 ./fp_growth iris/iris.data 0.2 0.7
+```
+
+You can also run the Iris example with:
+
+```sh
+make run-iris
 ```
 
 `min_support` controls how often a pattern has to appear in the dataset.
@@ -62,3 +76,16 @@ Classification rules
 ```
 
 This means the items on the left side are used to predict the class on the right side.
+
+## File Layout
+
+The code is split into smaller files so each part has its own job:
+
+```text
+main.cpp            program flow
+data_loader.cpp     reads and checks the csv file
+preprocessing.cpp   bins numeric values into low, medium, and high
+fp_tree.cpp         builds and mines the fp-tree
+classifier.cpp      creates classification rules
+output.cpp          handles printing and command-line parsing
+```
