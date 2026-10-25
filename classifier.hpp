@@ -10,7 +10,8 @@ bool isSubset(const Itemset& pattern, const Itemset& transaction);
 std::vector<ClassRule> generateClassificationRules(
     const std::map<Itemset, int>& frequentItemsets,
     const std::vector<LabeledTransaction>& transactions,
-    double minConfidence
+    double minConfidence,
+    const std::string& targetClass
 );
 
 #endif

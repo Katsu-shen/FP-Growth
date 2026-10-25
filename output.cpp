@@ -1,5 +1,6 @@
 #include "output.hpp"
 
+#include <algorithm>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -24,7 +25,8 @@ std::string formatItemset(const Itemset& itemset) {
 // print class rules with support ratio, confidence, and count
 void printClassificationRules(
     const std::vector<ClassRule>& rules,
-    int transactionCount
+    int transactionCount,
+    std::size_t maxRules
 ) {
     std::cout << std::fixed << std::setprecision(3);
     std::cout << "Transactions: " << transactionCount << "\n\n";
@@ -35,7 +37,13 @@ void printClassificationRules(
         return;
     }
 
-    for (const ClassRule& rule : rules) {
+    std::size_t rulesToPrint = rules.size();
+    if (maxRules != 0) {
+        rulesToPrint = std::min(rules.size(), maxRules);
+    }
+
+    for (std::size_t index = 0; index < rulesToPrint; ++index) {
+        const ClassRule& rule = rules[index];
         std::cout << "  " << std::setw(40) << std::left << formatItemset(rule.antecedent)
                   << " -> {" << rule.classLabel << "}"
                   << " support=" << rule.support
@@ -58,9 +66,26 @@ double parseRatio(const std::string& value, const std::string& name) {
     return parsed;
 }
 
+// parse a positive count for a rule limit or pattern length limit
+std::size_t parsePositiveCount(const std::string& value, const std::string& name) {
+    std::size_t parsed = 0;
+    std::stringstream stream(value);
+    stream >> parsed;
+    stream >> std::ws;
+
+    if (!stream.eof() || parsed == 0) {
+        throw std::runtime_error(name + " must be a positive whole number.");
+    }
+
+    return parsed;
+}
+
 // explain how to run the program if the arguments are wrong
 void printUsage(const char* programName) {
     std::cerr
-        << "Usage: " << programName << " <data.csv> <min_support> <min_confidence>\n"
-        << "Example: " << programName << " iris/iris.data 0.2 0.7\n";
+        << "Usage: " << programName
+        << " <data.csv> <min_support> <min_confidence> [--class <label>]"
+        << " [--max-length <count>] [--top <count>]\n"
+        << "Example: " << programName
+        << " bank+marketing/bank_clean.csv 0.05 0.7 --class yes --max-length 3 --top 50\n";
 }

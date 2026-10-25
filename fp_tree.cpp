@@ -303,6 +303,7 @@ Itemset canonicalItemset(Itemset itemset) {
 static void mineFPTree(
     const FPTree& tree,
     int minSupportCount,
+    std::size_t maxItemsetLength,
     const Itemset& suffix,
     std::map<Itemset, int>& frequentItemsets
 ) {
@@ -322,8 +323,15 @@ static void mineFPTree(
         std::vector<WeightedTransaction> patternBase = buildConditionalPatternBase(tree, item);
         FPTree conditionalTree = buildConditionalFPTree(patternBase, minSupportCount);
 
-        if (!conditionalTree.headerTable.empty()) {
-            mineFPTree(conditionalTree, minSupportCount, pattern, frequentItemsets);
+        bool canExtendPattern = maxItemsetLength == 0 || pattern.size() < maxItemsetLength;
+        if (canExtendPattern && !conditionalTree.headerTable.empty()) {
+            mineFPTree(
+                conditionalTree,
+                minSupportCount,
+                maxItemsetLength,
+                pattern,
+                frequentItemsets
+            );
         }
     }
 }
@@ -331,18 +339,20 @@ static void mineFPTree(
 // wrapper that starts mining with an empty suffix
 static std::map<Itemset, int> mineFPTree(
     const FPTree& tree,
-    int minSupportCount
+    int minSupportCount,
+    std::size_t maxItemsetLength
 ) {
     std::map<Itemset, int> frequentItemsets;
     Itemset suffix;
-    mineFPTree(tree, minSupportCount, suffix, frequentItemsets);
+    mineFPTree(tree, minSupportCount, maxItemsetLength, suffix, frequentItemsets);
     return frequentItemsets;
 }
 
 // run the full fp-growth flow for feature transactions
 std::map<Itemset, int> mineFrequentItemsets(
     const Transactions& transactions,
-    int minSupportCount
+    int minSupportCount,
+    std::size_t maxItemsetLength
 ) {
     std::map<std::string, int> supportCounts = countItemSupport(transactions);
     Transactions orderedTransactions = filterAndSortTransactions(
@@ -365,5 +375,5 @@ std::map<Itemset, int> mineFrequentItemsets(
     }
 
     FPTree tree = buildFPTree(orderedTransactions, supportCounts);
-    return mineFPTree(tree, minSupportCount);
+    return mineFPTree(tree, minSupportCount, maxItemsetLength);
 }

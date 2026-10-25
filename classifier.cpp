@@ -17,7 +17,8 @@ bool isSubset(const Itemset& pattern, const Itemset& transaction) {
 std::vector<ClassRule> generateClassificationRules(
     const std::map<Itemset, int>& frequentItemsets,
     const std::vector<LabeledTransaction>& transactions,
-    double minConfidence
+    double minConfidence,
+    const std::string& targetClass
 ) {
     std::vector<ClassRule> rules;
 
@@ -33,6 +34,10 @@ std::vector<ClassRule> generateClassificationRules(
         }
 
         for (const auto& classCount : classCounts) {
+            if (!targetClass.empty() && classCount.first != targetClass) {
+                continue;
+            }
+
             double support = static_cast<double>(classCount.second) / transactions.size();
             double confidence = static_cast<double>(classCount.second) / itemsetSupport;
 

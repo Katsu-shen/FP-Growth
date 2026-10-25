@@ -50,10 +50,30 @@ g++ -std=c++17 -Wall -Wextra -pedantic -O2 main.cpp data_loader.cpp preprocessin
 ./fp_growth <data.csv> <min_support> <min_confidence>
 ```
 
+Optional controls can focus the output and avoid generating very long patterns:
+
+```sh
+./fp_growth <data.csv> <min_support> <min_confidence> \
+  --class <label> --max-length <count> --top <count>
+```
+
 Example:
 
 ```sh
 ./fp_growth iris/iris.data 0.2 0.7
+```
+
+Heart disease example:
+
+```sh
+./fp_growth heart+disease/processed.cleveland.data 0.2 0.7
+```
+
+Bank marketing example that only prints the top 50 `yes` rules with at most
+three feature items:
+
+```sh
+./fp_growth bank+marketing/bank_clean.csv 0.02 0.6 --class yes --max-length 3 --top 50
 ```
 
 You can also run the Iris example with:
@@ -65,6 +85,10 @@ make run-iris
 `min_support` controls how often a pattern has to appear in the dataset.
 
 `min_confidence` controls how reliable a classification rule has to be.
+
+`--class` keeps rules for one class label. `--max-length` limits the number
+of feature items on the left side of a rule. `--top` limits the printed rules
+after they are sorted by confidence and support.
 
 ## Output
 

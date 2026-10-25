@@ -19,7 +19,8 @@ Transactions filterAndSortTransactions(
 Itemset canonicalItemset(Itemset itemset);
 std::map<Itemset, int> mineFrequentItemsets(
     const Transactions& transactions,
-    int minSupportCount
+    int minSupportCount,
+    std::size_t maxItemsetLength
 );
 
 #endif
