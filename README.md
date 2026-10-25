@@ -28,6 +28,8 @@ The feature names are generic, so a row can become something like:
 attr1=low, attr2=high, attr3=low, attr4=low -> Iris-setosa
 ```
 
+Missing values written as `?` are skipped, so they do not become frequent patterns.
+
 ## Build
 
 The easiest way to build the project is:

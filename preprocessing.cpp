@@ -7,7 +7,7 @@
 
 #include "data_loader.hpp"
 
-// missing values are kept as their own category
+// missing values are skipped instead of being mined as items
 bool isMissingValue(const std::string& value) {
     return value == "?";
 }
@@ -96,11 +96,13 @@ std::vector<LabeledTransaction> binLabeledTransactions(
         std::set<std::string> uniqueItems;
 
         for (std::size_t index = 0; index < rawTransaction.values.size(); ++index) {
+            if (isMissingValue(rawTransaction.values[index])) {
+                continue;
+            }
+
             std::string itemName = "attr" + std::to_string(index + 1) + "=";
 
-            if (isMissingValue(rawTransaction.values[index])) {
-                itemName += "missing";
-            } else if (numericColumns[index]) {
+            if (numericColumns[index]) {
                 double parsed = 0.0;
                 parseDouble(rawTransaction.values[index], parsed);
                 itemName += binNumericValue(parsed, mins[index], maxes[index]);
