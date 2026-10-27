@@ -10,8 +10,20 @@ bool isSubset(const Itemset& pattern, const Itemset& transaction);
 std::vector<ClassRule> generateClassificationRules(
     const std::map<Itemset, int>& frequentItemsets,
     const std::vector<LabeledTransaction>& transactions,
+    int minSupportCount,
     double minConfidence,
     const std::string& targetClass
 );
+void sortClassificationRules(std::vector<ClassRule>& rules);
+
+#ifdef FP_GROWTH_CUDA
+std::vector<ClassRule> generateClassificationRulesCuda(
+    const std::map<Itemset, int>& frequentItemsets,
+    const std::vector<LabeledTransaction>& transactions,
+    int minSupportCount,
+    double minConfidence,
+    const std::string& targetClass
+);
+#endif
 
 #endif

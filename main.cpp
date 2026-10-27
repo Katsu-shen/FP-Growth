@@ -26,6 +26,11 @@ int main(int argc, char* argv[]) {
         std::string targetClass;
         std::size_t maxItemsetLength = 0;
         std::size_t maxRules = 0;
+#ifdef FP_GROWTH_CUDA
+        std::string backend = "cuda";
+#else
+        std::string backend = "cpu";
+#endif
 
         for (int index = 4; index < argc; index += 2) {
             if (index + 1 >= argc) {
@@ -41,6 +46,11 @@ int main(int argc, char* argv[]) {
                 maxItemsetLength = parsePositiveCount(value, "max-length");
             } else if (option == "--top") {
                 maxRules = parsePositiveCount(value, "top");
+            } else if (option == "--backend") {
+                if (value != "cpu" && value != "cuda") {
+                    throw std::runtime_error("backend must be cpu or cuda.");
+                }
+                backend = value;
             } else {
                 throw std::runtime_error("Unknown option: " + option);
             }
@@ -57,12 +67,27 @@ int main(int argc, char* argv[]) {
             maxItemsetLength
         );
 
-        std::vector<ClassRule> rules = generateClassificationRules(
-            frequentItemsets,
-            labeledTransactions,
-            minConfidence,
-            targetClass
+        std::vector<ClassRule> rules;
+#ifdef FP_GROWTH_CUDA
+        if (backend == "cuda") {
+            rules = generateClassificationRulesCuda(
+                frequentItemsets, labeledTransactions, minSupportCount, minConfidence, targetClass
+            );
+        } else {
+            rules = generateClassificationRules(
+                frequentItemsets, labeledTransactions, minSupportCount, minConfidence, targetClass
+            );
+        }
+#else
+        if (backend == "cuda") {
+            throw std::runtime_error(
+                "CUDA support is not included in this executable. Build and run fp_growth_cuda."
+            );
+        }
+        rules = generateClassificationRules(
+            frequentItemsets, labeledTransactions, minSupportCount, minConfidence, targetClass
         );
+#endif
 
         printClassificationRules(
             rules,

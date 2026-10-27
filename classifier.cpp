@@ -17,6 +17,7 @@ bool isSubset(const Itemset& pattern, const Itemset& transaction) {
 std::vector<ClassRule> generateClassificationRules(
     const std::map<Itemset, int>& frequentItemsets,
     const std::vector<LabeledTransaction>& transactions,
+    int minSupportCount,
     double minConfidence,
     const std::string& targetClass
 ) {
@@ -34,6 +35,10 @@ std::vector<ClassRule> generateClassificationRules(
         }
 
         for (const auto& classCount : classCounts) {
+            if (classCount.second < minSupportCount) {
+                continue;
+            }
+
             if (!targetClass.empty() && classCount.first != targetClass) {
                 continue;
             }
@@ -53,6 +58,12 @@ std::vector<ClassRule> generateClassificationRules(
         }
     }
 
+    sortClassificationRules(rules);
+    return rules;
+}
+
+// order rules consistently across the CPU and CUDA implementations
+void sortClassificationRules(std::vector<ClassRule>& rules) {
     std::sort(rules.begin(), rules.end(), [](const ClassRule& left, const ClassRule& right) {
         if (left.confidence != right.confidence) {
             return left.confidence > right.confidence;
@@ -72,6 +83,4 @@ std::vector<ClassRule> generateClassificationRules(
 
         return left.classLabel < right.classLabel;
     });
-
-    return rules;
 }

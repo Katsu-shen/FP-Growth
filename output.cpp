@@ -85,7 +85,7 @@ void printUsage(const char* programName) {
     std::cerr
         << "Usage: " << programName
         << " <data.csv> <min_support> <min_confidence> [--class <label>]"
-        << " [--max-length <count>] [--top <count>]\n"
+        << " [--max-length <count>] [--top <count>] [--backend <cpu|cuda>]\n"
         << "Example: " << programName
         << " bank+marketing/bank_clean.csv 0.05 0.7 --class yes --max-length 3 --top 50\n";
 }
