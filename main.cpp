@@ -26,18 +26,29 @@ int main(int argc, char* argv[]) {
         std::string targetClass;
         std::size_t maxItemsetLength = 0;
         std::size_t maxRules = 0;
+        bool hasHeader = true;
 #ifdef FP_GROWTH_CUDA
         std::string backend = "cuda";
 #else
         std::string backend = "cpu";
 #endif
 
-        for (int index = 4; index < argc; index += 2) {
+        for (int index = 4; index < argc;) {
+            const std::string option = argv[index];
+            if (option == "--header") {
+                hasHeader = true;
+                ++index;
+                continue;
+            }
+            if (option == "--no-header") {
+                hasHeader = false;
+                ++index;
+                continue;
+            }
             if (index + 1 >= argc) {
                 throw std::runtime_error("Missing value for option: " + std::string(argv[index]));
             }
 
-            const std::string option = argv[index];
             const std::string value = argv[index + 1];
 
             if (option == "--class") {
@@ -54,10 +65,13 @@ int main(int argc, char* argv[]) {
             } else {
                 throw std::runtime_error("Unknown option: " + option);
             }
+            index += 2;
         }
 
-        std::vector<RawLabeledTransaction> rawTransactions = loadRawLabeledTransactions(inputPath);
-        std::vector<LabeledTransaction> labeledTransactions = binLabeledTransactions(rawTransactions);
+        LoadedLabeledTransactions loaded = loadRawLabeledTransactions(inputPath, hasHeader);
+        std::vector<LabeledTransaction> labeledTransactions = binLabeledTransactions(
+            loaded.transactions, loaded.featureNames
+        );
         Transactions featureTransactions = getFeatureTransactions(labeledTransactions);
         const int minSupportCount = static_cast<int>(std::ceil(minSupport * featureTransactions.size()));
 

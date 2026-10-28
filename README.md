@@ -2,11 +2,13 @@
 
 This project uses FP-Growth to create simple classification rules. Instead of only printing frequent itemsets, it finds itemsets that point to a class label.
 
-The data file should be comma-separated. The last value in each row is treated as the class label.
+The data file should be comma-separated with a header row. The final header names
+the class column, and the final value in each data row is treated as the class label.
 
 Example from the Iris data:
 
 ```text
+sepal_length,sepal_width,petal_length,petal_width,species
 5.1,3.5,1.4,0.2,Iris-setosa
 ```
 
@@ -22,10 +24,10 @@ medium
 high
 ```
 
-The feature names are generic, so a row can become something like:
+The feature names come from the CSV header, so a row can become something like:
 
 ```text
-attr1=low, attr2=high, attr3=low, attr4=low -> Iris-setosa
+sepal_length=low, sepal_width=high, petal_length=low, petal_width=low -> Iris-setosa
 ```
 
 Missing values written as `?` are skipped, so they do not become frequent patterns.
@@ -77,6 +79,9 @@ Optional controls can focus the output and avoid generating very long patterns:
 ./fp_growth <data.csv> <min_support> <min_confidence> \
   --class <label> --max-length <count> --top <count>
 ```
+
+Use `--no-header` for a legacy headerless CSV. Its feature names are generated
+as `attr1`, `attr2`, and so on. `--header` is accepted explicitly but is the default.
 
 The CUDA executable also accepts `--backend cpu` or `--backend cuda`:
 
@@ -150,7 +155,7 @@ The output prints classification rules:
 Transactions: 150
 
 Classification rules
-  {attr3=low, attr4=low} -> {Iris-setosa} support=0.333 confidence=1.000 count=50
+  {petal_length=low, petal_width=low} -> {Iris-setosa} support=0.333 confidence=1.000 count=50
 ```
 
 This means the items on the left side are used to predict the class on the right side.

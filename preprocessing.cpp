@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <limits>
 #include <set>
+#include <stdexcept>
 #include <string>
 
 #include "data_loader.hpp"
@@ -83,8 +84,12 @@ std::string binNumericValue(double value, double minValue, double maxValue) {
 
 // convert raw csv values into fp-growth items
 std::vector<LabeledTransaction> binLabeledTransactions(
-    const std::vector<RawLabeledTransaction>& rawTransactions
+    const std::vector<RawLabeledTransaction>& rawTransactions,
+    const std::vector<std::string>& featureNames
 ) {
+    if (featureNames.size() != rawTransactions.front().values.size()) {
+        throw std::runtime_error("Feature name count does not match transaction width.");
+    }
     std::vector<bool> numericColumns = findNumericColumns(rawTransactions);
     std::vector<double> mins;
     std::vector<double> maxes;
@@ -100,7 +105,7 @@ std::vector<LabeledTransaction> binLabeledTransactions(
                 continue;
             }
 
-            std::string itemName = "attr" + std::to_string(index + 1) + "=";
+            std::string itemName = featureNames[index] + "=";
 
             if (numericColumns[index]) {
                 double parsed = 0.0;

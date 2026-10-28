@@ -9,6 +9,6 @@
 std::string trim(const std::string& value);
 std::vector<std::string> splitCsvLine(const std::string& line);
 bool parseDouble(const std::string& value, double& parsed);
-std::vector<RawLabeledTransaction> loadRawLabeledTransactions(const std::string& path);
+LoadedLabeledTransactions loadRawLabeledTransactions(const std::string& path, bool hasHeader);
 
 #endif

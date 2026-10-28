@@ -16,7 +16,8 @@ void findNumericRanges(
 );
 std::string binNumericValue(double value, double minValue, double maxValue);
 std::vector<LabeledTransaction> binLabeledTransactions(
-    const std::vector<RawLabeledTransaction>& rawTransactions
+    const std::vector<RawLabeledTransaction>& rawTransactions,
+    const std::vector<std::string>& featureNames
 );
 Transactions getFeatureTransactions(const std::vector<LabeledTransaction>& labeledTransactions);
 

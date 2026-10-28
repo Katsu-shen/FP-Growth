@@ -19,6 +19,12 @@ struct RawLabeledTransaction {
     std::string classLabel;
 };
 
+// Input rows together with the name of each feature column.
+struct LoadedLabeledTransactions {
+    std::vector<RawLabeledTransaction> transactions;
+    std::vector<std::string> featureNames;
+};
+
 // cleaned transaction where items are ready for fp-growth
 struct LabeledTransaction {
     Itemset items;

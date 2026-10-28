@@ -2,6 +2,7 @@
 
 #include <cctype>
 #include <fstream>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 
@@ -42,14 +43,15 @@ bool parseDouble(const std::string& value, double& parsed) {
 }
 
 // load csv rows where the last value is the class label
-std::vector<RawLabeledTransaction> loadRawLabeledTransactions(const std::string& path) {
+LoadedLabeledTransactions loadRawLabeledTransactions(const std::string& path, bool hasHeader) {
     std::ifstream input(path);
     if (!input) {
         throw std::runtime_error("Could not open input file: " + path);
     }
 
-    std::vector<RawLabeledTransaction> transactions;
+    LoadedLabeledTransactions loaded;
     std::size_t expectedFeatureCount = 0;
+    bool headerRead = !hasHeader;
     std::string line;
     int lineNumber = 0;
 
@@ -65,6 +67,23 @@ std::vector<RawLabeledTransaction> loadRawLabeledTransactions(const std::string&
             throw std::runtime_error("Line " + std::to_string(lineNumber) + " needs at least one feature and one class label.");
         }
 
+        if (!headerRead) {
+            values.pop_back();
+            std::set<std::string> uniqueNames;
+            for (const std::string& name : values) {
+                if (name.empty()) {
+                    throw std::runtime_error("Header has an empty feature name.");
+                }
+                if (!uniqueNames.insert(name).second) {
+                    throw std::runtime_error("Header has a duplicate feature name: " + name);
+                }
+            }
+            loaded.featureNames = std::move(values);
+            expectedFeatureCount = loaded.featureNames.size();
+            headerRead = true;
+            continue;
+        }
+
         std::string classLabel = values.back();
         values.pop_back();
 
@@ -74,16 +93,23 @@ std::vector<RawLabeledTransaction> loadRawLabeledTransactions(const std::string&
 
         if (expectedFeatureCount == 0) {
             expectedFeatureCount = values.size();
+            for (std::size_t index = 0; index < expectedFeatureCount; ++index) {
+                loaded.featureNames.push_back("attr" + std::to_string(index + 1));
+            }
         } else if (values.size() != expectedFeatureCount) {
             throw std::runtime_error("Line " + std::to_string(lineNumber) + " has a different number of features.");
         }
 
-        transactions.push_back({values, classLabel});
+        loaded.transactions.push_back({values, classLabel});
     }
 
-    if (transactions.empty()) {
+    if (!headerRead) {
+        throw std::runtime_error("Input file has no header row.");
+    }
+
+    if (loaded.transactions.empty()) {
         throw std::runtime_error("Input file has no transactions.");
     }
 
-    return transactions;
+    return loaded;
 }
