@@ -127,8 +127,8 @@ make run-iris
 
 ## CPU Benchmark
 
-On the `optimization/fp-tree-integer-ids` branch, compare the integer-ID FP-tree
-with `origin/main` using only the CPU executable:
+The committed CPU benchmark records the prior string-item baseline against the
+integer-ID FP-tree. Run the benchmark script from a branch under comparison:
 
 ```sh
 python3 benchmarks/benchmark_cpu.py
@@ -137,6 +137,23 @@ python3 benchmarks/benchmark_cpu.py
 The script creates a temporary `origin/main` worktree, builds `fp_growth` in both
 worktrees, verifies byte-identical output, and writes CPU-only measurements to
 `benchmarks/results_cpu.csv` and `benchmarks/report_cpu.md`.
+
+## Next Optimization Steps
+
+The CUDA miner is result-compatible with CPU FP-tree mining, but it still uses
+candidate-by-transaction support checks. The highest-value next improvement is
+to store transaction membership as vertical item bitsets and calculate support
+with GPU bitwise intersections and population counts.
+
+Before porting more preprocessing work to CUDA, profile CSV loading, feature
+binning, candidate generation, GPU transfers, mining, and class-rule counting
+separately. For wide one-hot datasets such as Covertype, convert related binary
+columns into categorical items before mining; this reduces transaction width
+without discarding feature identity.
+
+For each optimization, compare CPU and CUDA output byte-for-byte and report at
+least five warm-cache runs with median elapsed time, min–max range, peak RSS,
+exact command options, and the Jetson/CUDA software versions.
 
 `min_support` is the minimum fraction of all transactions that contain both
 the feature pattern and its class label. For example, `0.02` requires at least
