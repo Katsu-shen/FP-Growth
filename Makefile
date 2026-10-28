@@ -5,7 +5,7 @@ SOURCES := main.cpp data_loader.cpp preprocessing.cpp fp_tree.cpp classifier.cpp
 NVCC ?= nvcc
 CUDA_ARCH ?= 87
 CUDA_TARGET := fp_growth_cuda
-CUDA_SOURCES := $(SOURCES) classifier_cuda.cu
+CUDA_SOURCES := $(SOURCES) classifier_cuda.cu fp_tree_cuda.cu
 CUDAFLAGS := -std=c++17 -O2 -DFP_GROWTH_CUDA \
 	-gencode arch=compute_$(CUDA_ARCH),code=sm_$(CUDA_ARCH) \
 	-Xcompiler -Wall,-Wextra,-pedantic

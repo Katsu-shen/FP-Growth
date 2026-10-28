@@ -23,4 +23,12 @@ std::map<Itemset, int> mineFrequentItemsets(
     std::size_t maxItemsetLength
 );
 
+#ifdef FP_GROWTH_CUDA
+std::map<Itemset, int> mineFrequentItemsetsCuda(
+    const Transactions& transactions,
+    int minSupportCount,
+    std::size_t maxItemsetLength
+);
+#endif
+
 #endif

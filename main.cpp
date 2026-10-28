@@ -29,8 +29,10 @@ int main(int argc, char* argv[]) {
         bool hasHeader = true;
 #ifdef FP_GROWTH_CUDA
         std::string backend = "cuda";
+        std::string miningBackend = "cuda";
 #else
         std::string backend = "cpu";
+        std::string miningBackend = "cpu";
 #endif
 
         for (int index = 4; index < argc;) {
@@ -62,6 +64,11 @@ int main(int argc, char* argv[]) {
                     throw std::runtime_error("backend must be cpu or cuda.");
                 }
                 backend = value;
+            } else if (option == "--mining-backend") {
+                if (value != "cpu" && value != "cuda") {
+                    throw std::runtime_error("mining-backend must be cpu or cuda.");
+                }
+                miningBackend = value;
             } else {
                 throw std::runtime_error("Unknown option: " + option);
             }
@@ -75,11 +82,27 @@ int main(int argc, char* argv[]) {
         Transactions featureTransactions = getFeatureTransactions(labeledTransactions);
         const int minSupportCount = static_cast<int>(std::ceil(minSupport * featureTransactions.size()));
 
-        std::map<Itemset, int> frequentItemsets = mineFrequentItemsets(
-            featureTransactions,
-            minSupportCount,
-            maxItemsetLength
+        std::map<Itemset, int> frequentItemsets;
+#ifdef FP_GROWTH_CUDA
+        if (miningBackend == "cuda") {
+            frequentItemsets = mineFrequentItemsetsCuda(
+                featureTransactions, minSupportCount, maxItemsetLength
+            );
+        } else {
+            frequentItemsets = mineFrequentItemsets(
+                featureTransactions, minSupportCount, maxItemsetLength
+            );
+        }
+#else
+        if (miningBackend == "cuda") {
+            throw std::runtime_error(
+                "CUDA mining support is not included in this executable. Build and run fp_growth_cuda."
+            );
+        }
+        frequentItemsets = mineFrequentItemsets(
+            featureTransactions, minSupportCount, maxItemsetLength
         );
+#endif
 
         std::vector<ClassRule> rules;
 #ifdef FP_GROWTH_CUDA

@@ -62,10 +62,11 @@ Set `CUDA_ARCH` only when building for a different NVIDIA GPU:
 make cuda CUDA_ARCH=87
 ```
 
-CUDA accelerates class-rule counting after the CPU mines feature patterns. CSV loading,
-preprocessing, FP-tree mining, and output formatting remain on the CPU. The CUDA program
-uses the GPU by default; pass `--backend cpu` to compare it with the same CPU algorithm.
-It fails clearly if CUDA is requested but no usable NVIDIA CUDA device is available.
+The CUDA executable mines frequent feature patterns and counts class rules on the GPU by
+default. CSV loading, preprocessing, candidate generation, and output formatting remain on
+the CPU. Use `--mining-backend cpu` to compare CPU FP-tree mining with CUDA mining, and use
+`--backend cpu` to compare CPU class-rule counting. It fails clearly if CUDA is requested
+but no usable NVIDIA CUDA device is available.
 
 ## Run
 
@@ -83,10 +84,11 @@ Optional controls can focus the output and avoid generating very long patterns:
 Use `--no-header` for a legacy headerless CSV. Its feature names are generated
 as `attr1`, `attr2`, and so on. `--header` is accepted explicitly but is the default.
 
-The CUDA executable also accepts `--backend cpu` or `--backend cuda`:
+The CUDA executable accepts independent mining and class-rule backends:
 
 ```sh
-./fp_growth_cuda iris/iris.data 0.2 0.7 --backend cuda
+./fp_growth_cuda iris/iris.data 0.2 0.7 --mining-backend cuda --backend cuda
+./fp_growth_cuda iris/iris.data 0.2 0.7 --mining-backend cpu --backend cpu
 ```
 
 To verify the CUDA result manually on the Jetson, run the same command through
@@ -144,8 +146,9 @@ the feature pattern and its class label. For example, `0.02` requires at least
 
 `--class` keeps rules for one class label. `--max-length` limits the number
 of feature items on the left side of a rule. `--top` limits the printed rules
-after they are sorted by confidence and support. `--backend` selects the CPU
-or CUDA rule-counting implementation when using `fp_growth_cuda`.
+after they are sorted by confidence and support. `--mining-backend` selects
+CPU FP-tree or CUDA frequent-pattern mining; `--backend` selects CPU or CUDA
+class-rule counting when using `fp_growth_cuda`.
 
 ## Output
 
