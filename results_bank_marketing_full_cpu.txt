@@ -1,0 +1,53 @@
+Transactions: 45211
+
+Classification rules
+  {attr16=success, attr7=no, attr9=cellular} -> {yes} support=0.015 confidence=0.704 count=662
+  {attr16=success, attr7=no, attr8=no}     -> {yes} support=0.016 confidence=0.704 count=705
+  {attr16=success, attr5=no, attr7=no}     -> {yes} support=0.016 confidence=0.702 count=729
+  {attr16=success, attr7=no}               -> {yes} support=0.016 confidence=0.701 count=729
+  {attr13=low, attr16=success, attr7=no}   -> {yes} support=0.016 confidence=0.701 count=729
+  {attr15=low, attr16=success, attr7=no}   -> {yes} support=0.016 confidence=0.701 count=729
+  {attr16=success, attr6=low, attr7=no}    -> {yes} support=0.016 confidence=0.700 count=727
+  {attr12=low, attr16=success, attr7=no}   -> {yes} support=0.016 confidence=0.700 count=726
+  {attr14=low, attr16=success, attr7=no}   -> {yes} support=0.015 confidence=0.699 count=687
+  {attr14=low, attr16=success, attr3=married} -> {yes} support=0.011 confidence=0.668 count=506
+  {attr14=low, attr16=success, attr8=no}   -> {yes} support=0.019 confidence=0.664 count=848
+  {attr14=low, attr16=success, attr9=cellular} -> {yes} support=0.018 confidence=0.658 count=813
+  {attr14=low, attr16=success, attr5=no}   -> {yes} support=0.020 confidence=0.658 count=884
+  {attr14=low, attr16=success}             -> {yes} support=0.020 confidence=0.657 count=884
+  {attr13=low, attr14=low, attr16=success} -> {yes} support=0.020 confidence=0.657 count=884
+  {attr14=low, attr15=low, attr16=success} -> {yes} support=0.020 confidence=0.657 count=884
+  {attr16=success, attr8=no, attr9=cellular} -> {yes} support=0.019 confidence=0.657 count=859
+  {attr14=low, attr16=success, attr6=low}  -> {yes} support=0.020 confidence=0.657 count=882
+  {attr16=success, attr3=married, attr8=no} -> {yes} support=0.011 confidence=0.656 count=516
+  {attr12=low, attr14=low, attr16=success} -> {yes} support=0.019 confidence=0.656 count=881
+  {attr16=success, attr3=married, attr9=cellular} -> {yes} support=0.011 confidence=0.655 count=494
+  {attr16=success, attr3=married}          -> {yes} support=0.012 confidence=0.654 count=547
+  {attr13=low, attr16=success, attr3=married} -> {yes} support=0.012 confidence=0.654 count=547
+  {attr15=low, attr16=success, attr3=married} -> {yes} support=0.012 confidence=0.654 count=547
+  {attr16=success, attr3=married, attr5=no} -> {yes} support=0.012 confidence=0.654 count=547
+  {attr16=success, attr3=married, attr6=low} -> {yes} support=0.012 confidence=0.654 count=546
+  {attr16=success, attr8=no}               -> {yes} support=0.021 confidence=0.654 count=934
+  {attr13=low, attr16=success, attr8=no}   -> {yes} support=0.021 confidence=0.654 count=934
+  {attr15=low, attr16=success, attr8=no}   -> {yes} support=0.021 confidence=0.654 count=934
+  {attr16=success, attr5=no, attr8=no}     -> {yes} support=0.021 confidence=0.654 count=934
+  {attr16=success, attr6=low, attr8=no}    -> {yes} support=0.021 confidence=0.653 count=932
+  {attr12=low, attr16=success, attr3=married} -> {yes} support=0.012 confidence=0.653 count=544
+  {attr12=low, attr16=success, attr8=no}   -> {yes} support=0.021 confidence=0.653 count=930
+  {attr16=success, attr5=no, attr9=cellular} -> {yes} support=0.020 confidence=0.651 count=900
+  {attr16=success, attr9=cellular}         -> {yes} support=0.020 confidence=0.650 count=900
+  {attr13=low, attr16=success, attr9=cellular} -> {yes} support=0.020 confidence=0.650 count=900
+  {attr15=low, attr16=success, attr9=cellular} -> {yes} support=0.020 confidence=0.650 count=900
+  {attr16=success, attr6=low, attr9=cellular} -> {yes} support=0.020 confidence=0.650 count=899
+  {attr12=low, attr16=success, attr9=cellular} -> {yes} support=0.020 confidence=0.649 count=897
+  {attr16=success, attr5=no}               -> {yes} support=0.022 confidence=0.648 count=978
+  {attr13=low, attr16=success, attr5=no}   -> {yes} support=0.022 confidence=0.648 count=978
+  {attr15=low, attr16=success, attr5=no}   -> {yes} support=0.022 confidence=0.648 count=978
+  {attr16=success, attr5=no, attr6=low}    -> {yes} support=0.022 confidence=0.648 count=976
+  {attr16=success}                         -> {yes} support=0.022 confidence=0.647 count=978
+  {attr13=low, attr16=success}             -> {yes} support=0.022 confidence=0.647 count=978
+  {attr15=low, attr16=success}             -> {yes} support=0.022 confidence=0.647 count=978
+  {attr13=low, attr15=low, attr16=success} -> {yes} support=0.022 confidence=0.647 count=978
+  {attr12=low, attr16=success, attr5=no}   -> {yes} support=0.022 confidence=0.647 count=974
+  {attr16=success, attr6=low}              -> {yes} support=0.022 confidence=0.647 count=976
+  {attr13=low, attr16=success, attr6=low}  -> {yes} support=0.022 confidence=0.647 count=976
