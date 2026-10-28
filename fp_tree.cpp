@@ -1,379 +1,240 @@
 #include "fp_tree.hpp"
 
 #include <algorithm>
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
-// nodes of the fp-tree
-// possible comparison of this with a linked list instead of map of children
-struct FPNode {
-    std::string item;
-    int count;
-    FPNode* parent;
-    std::map<std::string, std::unique_ptr<FPNode>> children; // map of the children under this node
-    FPNode* next;
-};
-
-// header table
-// keeps support count and links to each node with that item
-struct HeaderEntry {
-    int support;
-    FPNode* head;
-    FPNode* tail;
-};
-
-// stores the root node and the header table together
-struct FPTree {
-    std::unique_ptr<FPNode> root;
-    std::map<std::string, HeaderEntry> headerTable;
-};
-
-// count frequency of all items within transaction
+// These public helpers keep their original string-facing API.  The mining path
+// below converts each item once and uses integer IDs thereafter.
 std::map<std::string, int> countItemSupport(const Transactions& transactions) {
-    std::map<std::string, int> supportCounts;
-
-    for (const Itemset& transaction : transactions) {
-        for (const std::string& item : transaction) {
-            ++supportCounts[item];
-        }
-    }
-
-    return supportCounts;
+    std::map<std::string, int> counts;
+    for (const auto& transaction : transactions)
+        for (const auto& item : transaction) ++counts[item];
+    return counts;
 }
 
-// sort each itemset by the frequency of items in the entire transaction
-Itemset filterAndSortTransaction(
-    const Itemset& transaction,
-    const std::map<std::string, int>& supportCounts,
-    int minSupportCount
-) {
+Itemset filterAndSortTransaction(const Itemset& transaction,
+                                 const std::map<std::string, int>& counts,
+                                 int minSupportCount) {
     Itemset filtered;
-
-    // add transactions to filtered array if there is enough support
-    for (const std::string& item : transaction) {
-        auto support = supportCounts.find(item);
-        if (support != supportCounts.end() && support->second >= minSupportCount) {
-            filtered.push_back(item);
-        }
+    for (const auto& item : transaction) {
+        auto found = counts.find(item);
+        if (found != counts.end() && found->second >= minSupportCount) filtered.push_back(item);
     }
-
-    // sort by the strength of support
     std::sort(filtered.begin(), filtered.end(), [&](const std::string& left, const std::string& right) {
-        int leftSupport = supportCounts.at(left);
-        int rightSupport = supportCounts.at(right);
-
-        if (leftSupport != rightSupport) {
-            return leftSupport > rightSupport;
-        }
-
-        return left < right;
+        return counts.at(left) != counts.at(right) ? counts.at(left) > counts.at(right) : left < right;
     });
-
     return filtered;
 }
 
-// store these filtered itemsets into a new filtered transaction
-Transactions filterAndSortTransactions(
-    const Transactions& transactions,
-    const std::map<std::string, int>& supportCounts,
-    int minSupportCount
-) {
-    Transactions filteredTransactions;
-
-    for (const Itemset& transaction : transactions) {
-        Itemset filtered = filterAndSortTransaction(transaction, supportCounts, minSupportCount);
-        if (!filtered.empty()) {
-            filteredTransactions.push_back(filtered);
-        }
+Transactions filterAndSortTransactions(const Transactions& transactions,
+                                       const std::map<std::string, int>& counts,
+                                       int minSupportCount) {
+    Transactions result;
+    for (const auto& transaction : transactions) {
+        Itemset filtered = filterAndSortTransaction(transaction, counts, minSupportCount);
+        if (!filtered.empty()) result.push_back(std::move(filtered));
     }
-
-    return filteredTransactions;
+    return result;
 }
 
-// create ptrs for tree
-static std::unique_ptr<FPNode> createNode(
-    const std::string& item,
-    int count,
-    FPNode* parent
-) {
-    return std::make_unique<FPNode>(FPNode{item, count, parent, {}, nullptr});
-}
-
-// add a node to the linked list for this item in the header table
-static void linkHeaderNode(HeaderEntry& entry, FPNode* node) {
-    if (entry.head == nullptr) {
-        entry.head = node;
-        entry.tail = node;
-        return;
-    }
-
-    entry.tail->next = node;
-    entry.tail = node;
-}
-
-// build one path in the FP-tree from one transaction
-static void insertTransaction(
-    FPTree& tree,
-    const Itemset& transaction,
-    int count
-) {
-    FPNode* current = tree.root.get();
-
-    for (const std::string& item : transaction) {
-        // checks if the header already exists in the tree
-        auto child = current->children.find(item);
-
-        // if it doesn't then find() returns children.end()
-        if (child == current->children.end()) {
-            // insert full transaction into tree
-            // unique_ptr for dynamic memory alloc
-            std::unique_ptr<FPNode> newNode = createNode(item, count, current);
-            FPNode* rawNode = newNode.get(); // tmp pointer since we move og node into children map
-            current->children[item] = std::move(newNode);
-
-            // add the header as part of the headertable
-            linkHeaderNode(tree.headerTable[item], rawNode);
-            current = rawNode;
-        } else {
-            // increment existing node since this prefix already exists
-            child->second->count += count;
-            current = child->second.get();
-        }
-    }
-}
-
-// build fp tree from transactions that already include their counts
-static FPTree buildFPTree(
-    const std::vector<WeightedTransaction>& transactions,
-    const std::map<std::string, int>& supportCounts
-) {
-    FPTree tree;
-    tree.root = createNode("", 0, nullptr);
-
-    for (const auto& support : supportCounts) {
-        tree.headerTable[support.first] = HeaderEntry{support.second, nullptr, nullptr};
-    }
-
-    for (const WeightedTransaction& transaction : transactions) {
-        insertTransaction(tree, transaction.items, transaction.count);
-    }
-
-    return tree;
-}
-
-// build fp tree from normal transactions where each transaction has count 1
-static FPTree buildFPTree(
-    const Transactions& transactions,
-    const std::map<std::string, int>& supportCounts
-) {
-    std::vector<WeightedTransaction> weightedTransactions;
-
-    for (const Itemset& transaction : transactions) {
-        weightedTransactions.push_back({transaction, 1});
-    }
-
-    return buildFPTree(weightedTransactions, supportCounts);
-}
-
-// get items in order from least frequent to most frequent for mining
-static std::vector<std::string> itemsByAscendingSupport(
-    const std::map<std::string, HeaderEntry>& headerTable
-) {
-    std::vector<std::string> items;
-
-    for (const auto& entry : headerTable) {
-        if (entry.second.support > 0 && entry.second.head != nullptr) {
-            items.push_back(entry.first);
-        }
-    }
-
-    std::sort(items.begin(), items.end(), [&](const std::string& left, const std::string& right) {
-        int leftSupport = headerTable.at(left).support;
-        int rightSupport = headerTable.at(right).support;
-
-        // lexicological sorting
-        if (leftSupport != rightSupport) {
-            return leftSupport < rightSupport;
-        }
-
-        return left < right;
-    });
-
-    return items;
-}
-
-// build all prefix paths that lead into a specific item
-static std::vector<WeightedTransaction> buildConditionalPatternBase(
-    const FPTree& tree,
-    const std::string& item
-) {
-    std::vector<WeightedTransaction> patternBase;
-    auto header = tree.headerTable.find(item);
-
-    if (header == tree.headerTable.end()) {
-        return patternBase;
-    }
-
-    // follow the header linked list to visit every node for this item
-    for (FPNode* node = header->second.head; node != nullptr; node = node->next) {
-        Itemset prefixPath;
-
-        // walk upward from the item node to collect the path before it
-        for (FPNode* parent = node->parent; parent != nullptr && !parent->item.empty(); parent = parent->parent) {
-            prefixPath.push_back(parent->item);
-        }
-
-        if (!prefixPath.empty()) {
-            // reverse so the path goes root to leaf again
-            std::reverse(prefixPath.begin(), prefixPath.end());
-            patternBase.push_back({prefixPath, node->count});
-        }
-    }
-
-    return patternBase;
-}
-
-// count support for conditional transactions where each path has a weight
-static std::map<std::string, int> countWeightedItemSupport(
-    const std::vector<WeightedTransaction>& transactions
-) {
-    std::map<std::string, int> supportCounts;
-
-    for (const WeightedTransaction& transaction : transactions) {
-        for (const std::string& item : transaction.items) {
-            supportCounts[item] += transaction.count;
-        }
-    }
-
-    return supportCounts;
-}
-
-// filter conditional transactions and sort them by conditional support
-static std::vector<WeightedTransaction> filterAndSortWeightedTransactions(
-    const std::vector<WeightedTransaction>& transactions,
-    const std::map<std::string, int>& supportCounts,
-    int minSupportCount
-) {
-    std::vector<WeightedTransaction> filteredTransactions;
-
-    for (const WeightedTransaction& transaction : transactions) {
-        Itemset filtered = filterAndSortTransaction(transaction.items, supportCounts, minSupportCount);
-        if (!filtered.empty()) {
-            filteredTransactions.push_back({filtered, transaction.count});
-        }
-    }
-
-    return filteredTransactions;
-}
-
-// build the smaller fp-tree for one conditional pattern base
-static FPTree buildConditionalFPTree(
-    const std::vector<WeightedTransaction>& patternBase,
-    int minSupportCount
-) {
-    std::map<std::string, int> supportCounts = countWeightedItemSupport(patternBase);
-
-    // remove conditional items that do not pass support
-    for (auto iterator = supportCounts.begin(); iterator != supportCounts.end();) {
-        if (iterator->second < minSupportCount) {
-            iterator = supportCounts.erase(iterator);
-        } else {
-            ++iterator;
-        }
-    }
-
-    std::vector<WeightedTransaction> filteredTransactions = filterAndSortWeightedTransactions(
-        patternBase,
-        supportCounts,
-        minSupportCount
-    );
-
-    return buildFPTree(filteredTransactions, supportCounts);
-}
-
-// sort itemset alphabetically so the output map stores duplicates the same way
 Itemset canonicalItemset(Itemset itemset) {
     std::sort(itemset.begin(), itemset.end());
     return itemset;
 }
 
-// recursively mine the fp-tree to find frequent patterns
-static void mineFPTree(
-    const FPTree& tree,
-    int minSupportCount,
-    std::size_t maxItemsetLength,
-    const Itemset& suffix,
-    std::map<Itemset, int>& frequentItemsets
-) {
-    std::vector<std::string> items = itemsByAscendingSupport(tree.headerTable);
+namespace {
+using ItemId = std::uint32_t;
+using IdItemset = std::vector<ItemId>;
+using IdTransactions = std::vector<IdItemset>;
 
-    for (const std::string& item : items) {
+struct WeightedIdTransaction { IdItemset items; int count; };
+struct Dictionary { std::map<std::string, ItemId> toId; std::vector<std::string> toString; };
+struct FPNode {
+    ItemId item;
+    int count;
+    FPNode* parent;
+    std::map<ItemId, std::unique_ptr<FPNode>> children;
+    FPNode* next;
+};
+struct HeaderEntry { int support; FPNode* head; FPNode* tail; };
+struct FPTree { std::unique_ptr<FPNode> root; std::map<ItemId, HeaderEntry> headerTable; };
+
+static Dictionary buildDictionary(const Transactions& transactions) {
+    Dictionary dictionary;
+    for (const auto& transaction : transactions)
+        for (const auto& item : transaction) dictionary.toId.emplace(item, 0);
+    dictionary.toString.reserve(dictionary.toId.size());
+    ItemId id = 0;
+    // Lexical ID order preserves the original lexical tie-breaker.
+    for (auto& entry : dictionary.toId) { entry.second = id++; dictionary.toString.push_back(entry.first); }
+    return dictionary;
+}
+
+static IdTransactions encodeTransactions(const Transactions& transactions, const Dictionary& dictionary) {
+    IdTransactions encoded;
+    encoded.reserve(transactions.size());
+    for (const auto& transaction : transactions) {
+        IdItemset ids;
+        ids.reserve(transaction.size());
+        for (const auto& item : transaction) ids.push_back(dictionary.toId.at(item));
+        encoded.push_back(std::move(ids));
+    }
+    return encoded;
+}
+
+static std::map<ItemId, int> countIds(const IdTransactions& transactions) {
+    std::map<ItemId, int> counts;
+    for (const auto& transaction : transactions)
+        for (ItemId item : transaction) ++counts[item];
+    return counts;
+}
+
+static IdItemset filterAndSortIds(const IdItemset& transaction,
+                                  const std::map<ItemId, int>& counts,
+                                  int minSupportCount) {
+    IdItemset filtered;
+    for (ItemId item : transaction) {
+        auto found = counts.find(item);
+        if (found != counts.end() && found->second >= minSupportCount) filtered.push_back(item);
+    }
+    std::sort(filtered.begin(), filtered.end(), [&](ItemId left, ItemId right) {
+        return counts.at(left) != counts.at(right) ? counts.at(left) > counts.at(right) : left < right;
+    });
+    return filtered;
+}
+
+static IdTransactions filterAndSortIds(const IdTransactions& transactions,
+                                       const std::map<ItemId, int>& counts,
+                                       int minSupportCount) {
+    IdTransactions result;
+    result.reserve(transactions.size());
+    for (const auto& transaction : transactions) {
+        IdItemset filtered = filterAndSortIds(transaction, counts, minSupportCount);
+        if (!filtered.empty()) result.push_back(std::move(filtered));
+    }
+    return result;
+}
+
+static std::unique_ptr<FPNode> createNode(ItemId item, int count, FPNode* parent) {
+    return std::make_unique<FPNode>(FPNode{item, count, parent, {}, nullptr});
+}
+
+static void linkHeaderNode(HeaderEntry& entry, FPNode* node) {
+    if (entry.head == nullptr) entry.head = entry.tail = node;
+    else { entry.tail->next = node; entry.tail = node; }
+}
+
+static void insertTransaction(FPTree& tree, const IdItemset& transaction, int count) {
+    FPNode* current = tree.root.get();
+    for (ItemId item : transaction) {
+        auto child = current->children.find(item);
+        if (child == current->children.end()) {
+            auto node = createNode(item, count, current);
+            FPNode* raw = node.get();
+            current->children.emplace(item, std::move(node));
+            linkHeaderNode(tree.headerTable.at(item), raw);
+            current = raw;
+        } else { child->second->count += count; current = child->second.get(); }
+    }
+}
+
+static FPTree buildTree(const std::vector<WeightedIdTransaction>& transactions,
+                        const std::map<ItemId, int>& counts) {
+    FPTree tree;
+    tree.root = createNode(0, 0, nullptr);
+    for (const auto& count : counts) tree.headerTable.emplace(count.first, HeaderEntry{count.second, nullptr, nullptr});
+    for (const auto& transaction : transactions) insertTransaction(tree, transaction.items, transaction.count);
+    return tree;
+}
+
+static FPTree buildTree(const IdTransactions& transactions, const std::map<ItemId, int>& counts) {
+    std::vector<WeightedIdTransaction> weighted;
+    weighted.reserve(transactions.size());
+    for (const auto& transaction : transactions) weighted.push_back({transaction, 1});
+    return buildTree(weighted, counts);
+}
+
+static std::vector<ItemId> itemsByAscendingSupport(const std::map<ItemId, HeaderEntry>& headers) {
+    std::vector<ItemId> items;
+    for (const auto& entry : headers)
+        if (entry.second.support > 0 && entry.second.head != nullptr) items.push_back(entry.first);
+    std::sort(items.begin(), items.end(), [&](ItemId left, ItemId right) {
+        return headers.at(left).support != headers.at(right).support
+            ? headers.at(left).support < headers.at(right).support : left < right;
+    });
+    return items;
+}
+
+static std::vector<WeightedIdTransaction> conditionalBase(const FPTree& tree, ItemId item) {
+    std::vector<WeightedIdTransaction> base;
+    auto header = tree.headerTable.find(item);
+    if (header == tree.headerTable.end()) return base;
+    for (FPNode* node = header->second.head; node != nullptr; node = node->next) {
+        IdItemset path;
+        for (FPNode* parent = node->parent; parent != tree.root.get(); parent = parent->parent) path.push_back(parent->item);
+        if (!path.empty()) { std::reverse(path.begin(), path.end()); base.push_back({std::move(path), node->count}); }
+    }
+    return base;
+}
+
+static std::map<ItemId, int> countWeighted(const std::vector<WeightedIdTransaction>& transactions) {
+    std::map<ItemId, int> counts;
+    for (const auto& transaction : transactions)
+        for (ItemId item : transaction.items) counts[item] += transaction.count;
+    return counts;
+}
+
+static FPTree conditionalTree(const std::vector<WeightedIdTransaction>& base, int minSupportCount) {
+    std::map<ItemId, int> counts = countWeighted(base);
+    for (auto iterator = counts.begin(); iterator != counts.end();)
+        if (iterator->second < minSupportCount) iterator = counts.erase(iterator); else ++iterator;
+    std::vector<WeightedIdTransaction> filtered;
+    filtered.reserve(base.size());
+    for (const auto& transaction : base) {
+        IdItemset items = filterAndSortIds(transaction.items, counts, minSupportCount);
+        if (!items.empty()) filtered.push_back({std::move(items), transaction.count});
+    }
+    return buildTree(filtered, counts);
+}
+
+static void mineTree(const FPTree& tree, int minSupportCount, std::size_t maxItemsetLength,
+                     const IdItemset& suffix, std::map<IdItemset, int>& itemsets) {
+    for (ItemId item : itemsByAscendingSupport(tree.headerTable)) {
         const HeaderEntry& header = tree.headerTable.at(item);
-        if (header.support < minSupportCount) {
-            continue;
-        }
-
-        Itemset pattern = suffix;
+        if (header.support < minSupportCount) continue;
+        IdItemset pattern = suffix;
         pattern.push_back(item);
-        frequentItemsets[canonicalItemset(pattern)] = header.support;
-
-        // use this item to build and mine its conditional tree
-        std::vector<WeightedTransaction> patternBase = buildConditionalPatternBase(tree, item);
-        FPTree conditionalTree = buildConditionalFPTree(patternBase, minSupportCount);
-
-        bool canExtendPattern = maxItemsetLength == 0 || pattern.size() < maxItemsetLength;
-        if (canExtendPattern && !conditionalTree.headerTable.empty()) {
-            mineFPTree(
-                conditionalTree,
-                minSupportCount,
-                maxItemsetLength,
-                pattern,
-                frequentItemsets
-            );
-        }
+        std::sort(pattern.begin(), pattern.end());
+        itemsets[pattern] = header.support;
+        FPTree conditional = conditionalTree(conditionalBase(tree, item), minSupportCount);
+        if ((maxItemsetLength == 0 || pattern.size() < maxItemsetLength) && !conditional.headerTable.empty())
+            mineTree(conditional, minSupportCount, maxItemsetLength, pattern, itemsets);
     }
 }
+}  // namespace
 
-// wrapper that starts mining with an empty suffix
-static std::map<Itemset, int> mineFPTree(
-    const FPTree& tree,
-    int minSupportCount,
-    std::size_t maxItemsetLength
-) {
-    std::map<Itemset, int> frequentItemsets;
-    Itemset suffix;
-    mineFPTree(tree, minSupportCount, maxItemsetLength, suffix, frequentItemsets);
-    return frequentItemsets;
-}
-
-// run the full fp-growth flow for feature transactions
-std::map<Itemset, int> mineFrequentItemsets(
-    const Transactions& transactions,
-    int minSupportCount,
-    std::size_t maxItemsetLength
-) {
-    std::map<std::string, int> supportCounts = countItemSupport(transactions);
-    Transactions orderedTransactions = filterAndSortTransactions(
-        transactions,
-        supportCounts,
-        minSupportCount
-    );
-
-    // remove items that do not meet min support
-    for (auto iterator = supportCounts.begin(); iterator != supportCounts.end();) {
-        if (iterator->second < minSupportCount) {
-            iterator = supportCounts.erase(iterator);
-        } else {
-            ++iterator;
-        }
+std::map<Itemset, int> mineFrequentItemsets(const Transactions& transactions, int minSupportCount,
+                                            std::size_t maxItemsetLength) {
+    Dictionary dictionary = buildDictionary(transactions);
+    IdTransactions encoded = encodeTransactions(transactions, dictionary);
+    std::map<ItemId, int> counts = countIds(encoded);
+    IdTransactions ordered = filterAndSortIds(encoded, counts, minSupportCount);
+    for (auto iterator = counts.begin(); iterator != counts.end();)
+        if (iterator->second < minSupportCount) iterator = counts.erase(iterator); else ++iterator;
+    if (ordered.empty() || counts.empty()) return {};
+    FPTree tree = buildTree(ordered, counts);
+    std::map<IdItemset, int> encodedItemsets;
+    mineTree(tree, minSupportCount, maxItemsetLength, {}, encodedItemsets);
+    std::map<Itemset, int> decoded;
+    for (const auto& entry : encodedItemsets) {
+        Itemset itemset;
+        for (ItemId item : entry.first) itemset.push_back(dictionary.toString.at(item));
+        decoded.emplace(std::move(itemset), entry.second);
     }
-
-    if (orderedTransactions.empty() || supportCounts.empty()) {
-        return {};
-    }
-
-    FPTree tree = buildFPTree(orderedTransactions, supportCounts);
-    return mineFPTree(tree, minSupportCount, maxItemsetLength);
+    return decoded;
 }

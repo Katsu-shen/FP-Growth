@@ -118,6 +118,19 @@ You can also run the Iris example with:
 make run-iris
 ```
 
+## CPU Benchmark
+
+On the `optimization/fp-tree-integer-ids` branch, compare the integer-ID FP-tree
+with `origin/main` using only the CPU executable:
+
+```sh
+python3 benchmarks/benchmark_cpu.py
+```
+
+The script creates a temporary `origin/main` worktree, builds `fp_growth` in both
+worktrees, verifies byte-identical output, and writes CPU-only measurements to
+`benchmarks/results_cpu.csv` and `benchmarks/report_cpu.md`.
+
 `min_support` is the minimum fraction of all transactions that contain both
 the feature pattern and its class label. For example, `0.02` requires at least
 2% of all rows to match both sides of a rule.
